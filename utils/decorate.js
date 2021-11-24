@@ -1,14 +1,36 @@
 import * as KOA from 'koa'
 import  KoaRouter from 'koa-router'
 import * as glob from 'glob'
-
+import path from 'path'
 
 const router = new KoaRouter()
-const path =require('path')
 
-const createMethod =router=>method =>path=>{
+// 类装饰器定义
+export const authority = (middlewares)=>{
+    return function(target,property){
+        // 定义到原型链上进行传值
+        target.prototype.middlewares = middlewares;
+    }
+}
+
+const createMethod =router=>method =>(path,options)=>{
     return (target,property)=>{
-        router[method](path,target[property])
+        //由于属性装饰器先执行  所有丢到异步里边 让类的装饰器先执行
+        process.nextTick(()=>{
+            let middlewares =[]
+
+            if(target?.middlewares){
+                middlewares.push(...target?.middlewares)
+            }
+            
+            if(options?.middlewares){
+                middlewares.push(...options?.middlewares)
+            }
+
+            middlewares.push(target[property])
+            // 路由注册 返回一个装饰器
+            router[method](path,...middlewares)
+        })
     }
 }
 
@@ -19,11 +41,9 @@ const createMethod =router=>method =>path=>{
 // }
 
 
-const method= createMethod(router)
 
-export const get = method('get')
-export const post = method('post')
-
+export const get = createMethod(router)('get')
+export const post = createMethod(router)('post')
 
 export const load=(folder)=>{
     const externName=".{js,ts}"
